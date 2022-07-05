@@ -5,23 +5,32 @@ Function Test-Environment {
 
     Write-Host "Testing Host System ${$env:ComputerName}" -ForegroundColor Green
 
-    # Test running elevated
-    $isClustered = Get-Cluster -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    try {   $isClustered = Get-Cluster -ErrorAction SilentlyContinue -WarningAction SilentlyContinue }
+    catch { $isClustered = $false }
+    
     if ($isClustered) { Write-Host "[$PASS] The system is clustered" -ForegroundColor DarkCyan }
     else {
         Write-Host "[$FAIL] The system is NOT clustered" -ForegroundColor Red
         $testsFailed ++
     }
 
-    if ($testsFailed -ne 0) {
-        throw 'System is not ready for deployment. Please deploy the cluster prior to moving forward.'
-    }
-
-    $isInstalled = Get-WindowsFeature -Name NetworkATC
+    $isInstalled = Get-WindowsFeature -Name NetworkATC -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     if ($isInstalled) { Write-Host "[$PASS] The system has Network ATC installed" -ForegroundColor DarkCyan }
     else {
         Write-Host "[$FAIL] The system does not have Network ATC installed" -ForegroundColor Red
         $testsFailed ++
+    }
+
+    $failLBFOTeams = Get-NetLbfoTeam -ErrorAction SilentlyContinue
+    if (-not($failLBFOTeams)) { Write-Host "[$PASS] No LBFO Teams were found." -ForegroundColor DarkCyan }
+    else {
+        Write-Host "[$FAIL] LBFO Teams are not supported. To view the LBFO teams found, run the command Get-NetLBFOTeam and remove the team." -ForegroundColor Red
+        $testsFailed ++
+    }
+
+    # All tests must be above this
+    if ($testsFailed -ne 0) {
+        throw 'System is not ready for deployment. Please deploy the cluster prior to moving forward.'
     }
 }
 
@@ -41,10 +50,8 @@ Function Get-InUseIntentTypes {
         $thisIntentTypes = [enum]::GetValues([IntentEnum]) | Where-Object {$_.value__ -band $thisIntent.IntentType}
     
         Switch ($thisIntentTypes | Sort-Object Name) {
-            Compute { $allIntentTypes += 'Compute' }
-    
-            Storage { $allIntentTypes += 'Storage' }
-    
+            Compute    { $allIntentTypes += 'Compute'    }
+            Storage    { $allIntentTypes += 'Storage'    }
             Management { $allIntentTypes += 'Management' }
         }
     }
